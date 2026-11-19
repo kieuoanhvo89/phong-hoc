@@ -32,6 +32,8 @@ label.l{display:block;font-weight:700;font-size:14px;margin:12px 0 6px}
 #poll{position:fixed;inset:0;background:#000a;z-index:40;display:none;align-items:center;justify-content:center}#poll .panel{width:min(520px,94vw);margin:0}
 /* student */
 #stu{min-height:100vh;display:flex;flex-direction:column;padding:16px;gap:12px}
+#sslide{width:min(100%,calc((100vh - 270px)*1.7777));min-width:min(100%,320px);margin:0 auto;border-radius:10px;background:#000}
+#ctl{display:flex;flex-direction:column;flex:1;gap:10px}#ctl .opts button{min-height:64px;font-size:20px}
 #stu .top{display:flex;justify-content:space-between;font-size:14px;color:var(--mu)}
 .opts{display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1}
 .opts button{font-size:22px;border-radius:18px;min-height:96px;color:#fff;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;text-align:center;line-height:1.2}
@@ -2768,10 +2770,11 @@ function visualOf(s){const m=(LESSON.form&&LESSON.form.img)||"both",pick=s.pick,
  if(m!=="doc"&&s.fig){const f=renderFigure(s.fig);if(f)return{src:svgUri(f.svg),ratio:f.ratio}}
  if(m!=="doc"&&s.svg&&/<svg/i.test(s.svg))return{src:svgUri(s.svg),ratio:svgRatio(s.svg)};return null}
 const K=0.1389;
-function slideHtml(i,stp){const s=LESSON.slides[i],th=THEMES[STY];let h=`<div style="position:absolute;inset:0;background:#${th.bg};display:block"></div>`;
- for(const o of layoutSlide({...s,visual:visualOf(s)},th,{idx:i,total:LESSON.slides.length,logo:LOGO})){if(o.fb!=null)continue;const hide=o.step>=stp&&o.step>=0;
+function imgKey(src,keys){let k=H.imgSrc.get(src);if(!k){k="m"+(H.imgSrc.size+1);H.imgSrc.set(src,k);H.imgByKey.set(k,src)}if(keys&&!keys.includes(k))keys.push(k);return k}
+function slideHtml(i,stp,keys){const s=LESSON.slides[i],th=THEMES[STY];let h=`<div style="position:absolute;inset:0;background:#${th.bg};display:block"></div>`;
+ for(const o of layoutSlide({...s,visual:visualOf(s)},th,{idx:i,total:LESSON.slides.length,logo:LOGO})){if(o.fb!=null)continue;const hide=o.step>=stp&&o.step>=0;if(keys&&hide)continue;
   let css=`left:${o.x/SW*100}%;top:${o.y/SH*100}%;width:${o.w/SW*100}%;height:${o.h/SH*100}%;`;
-  if(o.k==="img"){h+=`<img class="${hide?"h":""}" src="${o.src}" style="${css}${o.round?"border-radius:50%;":""}">`;continue}
+  if(o.k==="img"){h+=keys?`<img data-k="${imgKey(o.src,keys)}" style="${css}${o.round?"border-radius:50%;":""}">`:`<img class="${hide?"h":""}" src="${o.src}" style="${css}${o.round?"border-radius:50%;":""}">`;continue}
   if(o.fill)css+=`background:#${o.fill};`;if(o.line)css+=`border:${(o.lw||1)*K}cqw solid #${o.line};`;if(o.k==="ellipse")css+="border-radius:50%;";if(o.k==="round")css+="border-radius:1.2cqw;";
   if(o.text!=null){css+=`font-size:${o.fs*K}cqw;color:#${o.c};font-weight:${o.b?700:400};justify-content:${o.al==="c"?"center":o.al==="r"?"flex-end":"flex-start"};align-items:${o.va==="m"?"center":"flex-start"};text-align:${o.al==="c"?"center":o.al==="r"?"right":"left"};`;css+=o.k==="text"?"padding:0;":`padding:${4*K}cqw ${(o.mr||7)*K}cqw ${4*K}cqw ${7*K}cqw;`}
   h+=`<div class="${hide?"h":""}" style="${css}">${o.text!=null?`<span style="display:block;width:100%">${esc(o.text)}</span>`:""}</div>`}
@@ -2795,13 +2798,15 @@ function interactiveOf(i){const s=LESSON.slides[i];
  if(s.layout==="practice"&&s.answer)return{kind:"text",answer:s.answer,accept:s.accept||[],title:s.title};
  return null}
 function rank(){return [...H.players.values()].sort((a,b)=>b.score-a.score)}
-function send(p,m){try{if(p.conn&&p.conn.open)p.conn.send(m)}catch(e){}}
+let ckSeq=0;function send(p,m){try{if(!(p.conn&&p.conn.open))return;const s=JSON.stringify(m);if(s.length<=12000){p.conn.send(m);return}
+ const id="c"+(++ckSeq),n=Math.ceil(s.length/12000);for(let i=0;i<n;i++)p.conn.send({t:"ck",id,n,i,d:s.slice(i*12000,(i+1)*12000)})}catch(e){}}
+function pushSlide(p){if(!H.sl||!p.on)return;if(!p.sent)p.sent=new Set();H.sl.keys.forEach(k=>{if(!p.sent.has(k)){p.sent.add(k);send(p,{t:"img",k,src:H.imgByKey.get(k)})}});send(p,{t:"slide",html:H.sl.html})}
 function bcast(m){H.players.forEach(p=>send(p,m))}
 function setLobby(){ $("lcode").textContent=H.code;const url=location.origin+location.pathname+"?r="+H.code;$("llink").textContent=url;
  try{const qr=qrcode(0,"M");qr.addData(url);qr.make();$("lqr").innerHTML=qr.createSvgTag(5,0)}catch(e){}
  $("ltitle").textContent="Phòng: "+(LESSON.slides[0]&&LESSON.slides[0].title||"Bài giảng");updLobby()}
 function updLobby(){const ps=[...H.players.values()];$("lcount").textContent=ps.filter(p=>p.on).length;$("lnames").innerHTML=ps.map(p=>`<span style="${p.on?"":"opacity:.45"}">${esc(p.name)}</span>`).join("");if(H.running)hud()}
-function startHost(){H={code:rnd(6),players:new Map(),running:false,peer:null};
+function startHost(){H={code:rnd(6),players:new Map(),running:false,peer:null,imgSrc:new Map(),imgByKey:new Map(),sl:null};
  const mk=()=>{const pr=new Peer(PFX+H.code,peerOpts());H.peer=pr;
   pr.on("open",()=>{$("home").classList.add("hide");$("lobby").classList.remove("hide");setLobby()});
   pr.on("error",e=>{if(e.type==="unavailable-id"){H.code=rnd(6);mk()}else{$("hmsg").textContent=perr(e);$("hgo").disabled=false}});
@@ -2809,8 +2814,8 @@ function startHost(){H={code:rnd(6),players:new Map(),running:false,peer:null};
 function onMsg(c,m){if(!m||typeof m!=="object")return;
  if(m.t==="join"){const pid=String(m.pid||c.peer).slice(0,40);let p=H.players.get(pid);
   if(!p){let nm=String(m.name||"Học sinh").trim().slice(0,20)||"Học sinh",base=nm,k=2;while([...H.players.values()].some(x=>x.name===nm))nm=base+" "+k++;p={pid,name:nm,score:0,ans:{}};H.players.set(pid,p)}
-  p.conn=c;p.on=true;send(p,{t:"hello",name:p.name,score:p.score});updLobby();
-  if(H.running){if(q&&q.open)sendQ(p);else send(p,{t:"wait",title:LESSON.slides[cur].title})}return}
+  p.conn=c;p.on=true;p.sent=new Set();send(p,{t:"hello",name:p.name,score:p.score});updLobby();
+  if(H.running){pushSlide(p);if(q&&q.open)sendQ(p);else send(p,{t:"wait",title:LESSON.slides[cur].title})}return}
  let p=[...H.players.values()].find(x=>x.conn===c);if(!p)return;
  if(m.t==="ans"&&q&&q.open&&m.qid===q.qid){if(q.answers[p.pid]&&!q.poll)return;q.answers[p.pid]={v:m.v,t:performance.now()-q.t0};hud();if(q.poll)pollView()}}
 function sendQ(p){const left=q.limit?Math.max(0,q.limit*1000-(performance.now()-q.t0)):null;send(p,{t:"q",qid:q.qid,kind:q.kind,title:q.title,opts:q.opts,texts:q.texts,limitMs:left,poll:!!q.poll,done:!!q.answers[p.pid]})}
@@ -2824,7 +2829,7 @@ function reveal(){if(!q||!q.open)return;q.open=false;clearInterval(H.tm);const c
  if(!q.poll)H.players.forEach(p=>{const a=q.answers[p.pid];const ok=judge(p,a);let pts=0;if(ok){const frac=q.limit?Math.max(0,1-a.t/(q.limit*1000)):0.5;pts=500+Math.round(500*frac)}p.score+=pts;p.last={ok,pts,answered:!!a}});
  const rk=rank();H.players.forEach(p=>{if(q.poll)send(p,{t:"poll_res",counts,opts:q.opts});else send(p,{t:"res",ok:p.last.ok,answered:p.last.answered,pts:p.last.pts,total:p.score,rank:rk.indexOf(p)+1,of:rk.length,right:q.kind==="mc"?(q.correct!=null?(q.texts?q.opts[q.correct]:q.opts[q.correct]):""):q.answer})});
  if(!q.poll&&!q.fromPoll){st=clicks(cur);draw()}hud();lb();pollView(true)}
-function draw(){$("card").innerHTML=slideHtml(cur,st)}
+function draw(){$("card").innerHTML=slideHtml(cur,st);if(H&&H.running){const keys=[];H.sl={html:slideHtml(cur,st,keys),keys};H.players.forEach(p=>pushSlide(p))}}
 function go(c,s){cur=c;st=s;q=null;clearInterval(H.tm);draw();const it=s===0?interactiveOf(c):null;if(it)openQ(it);else bcast({t:"wait",title:LESSON.slides[c].title});hud()}
 function nx(){if(!H.running)return;if(pollOpen){return}if(q&&q.open){reveal();return}if(st<clicks(cur)){st++;draw();hud()}else if(cur<LESSON.slides.length-1)go(cur+1,0);else endAll()}
 function pvv(){if(!H.running||pollOpen||(q&&q.open))return;if(st>0){st--;draw();hud()}else if(cur>0)go(cur-1,clicks(cur-1))}
@@ -2854,16 +2859,24 @@ $("lsample").onclick=()=>{LESSON=SAMPLE;STY="sang";$("hmsg").textContent="Đã n
 $("hgo").onclick=()=>{$("hgo").disabled=true;$("hmsg").textContent="Đang tạo phòng…";startHost()};
 /* ================= Học sinh ================= */
 let S={peer:null,conn:null,code:"",name:"",pid:localStorage.getItem("bg-pid")||("p"+rnd(10)),score:0,tm:null,ended:false,answered:false};localStorage.setItem("bg-pid",S.pid);
-function sv(html){$("home").classList.add("hide");$("stu").classList.remove("hide");$("stu").innerHTML=`<div class="top"><span>👤 ${esc(S.name)}</span><span>Phòng ${S.code} · ${S.score} điểm</span></div>`+html}
+S.imgs={};S.ck={};
+function sv(html){$("home").classList.add("hide");$("stu").classList.remove("hide");if(!$("ctl"))$("stu").innerHTML='<div class="top"><span id="tl"></span><span id="tr"></span></div><div class="sld hide" id="sslide"></div><div id="ctl"></div>';
+ $("tl").textContent="👤 "+S.name;$("tr").textContent="Phòng "+S.code+" · "+S.score+" điểm";$("ctl").innerHTML=html}
+function fillImgs(){document.querySelectorAll("#sslide img[data-k]").forEach(im=>{const s=S.imgs[im.dataset.k];if(s&&im.getAttribute("src")!==s)im.src=s})}
+function showSlide(h){if(!$("sslide"))sv("");const el=$("sslide");el.classList.remove("hide");el.innerHTML=h;fillImgs()}
 function joinRoom(){const code=$("jcode").value.trim().toUpperCase(),name=$("jname").value.trim();if(code.length!==6||!name){$("jmsg").textContent="Em nhập đủ mã 6 ký tự và tên nhé.";return}
  S.code=code;S.name=name;$("jgo").disabled=true;$("jmsg").textContent="Đang vào phòng…";
  S.peer=new Peer(peerOpts());S.peer.on("open",conn);S.peer.on("error",e=>{if(e.type==="peer-unavailable"){$("stu").classList.add("hide");$("home").classList.remove("hide");$("jmsg").textContent="Không tìm thấy phòng. Em kiểm tra lại mã nhé.";$("jgo").disabled=false}else{$("jmsg").textContent=perr(e);$("jgo").disabled=false}})}
 function conn(){const c=S.peer.connect(PFX+S.code,{reliable:true,serialization:"json"});S.conn=c;
  c.on("open",()=>c.send({t:"join",name:S.name,pid:S.pid}));c.on("data",onHost);
  c.on("close",()=>{if(S.ended)return;sv('<div class="msg">Mất kết nối… đang thử vào lại ⏳</div>');setTimeout(()=>{if(S.peer&&!S.peer.destroyed){if(S.peer.disconnected)S.peer.reconnect();conn()}},2500)})}
-function onHost(m){if(!m||!m.t)return;clearInterval(S.tm);
+function onHost(m){if(!m||!m.t)return;
+ if(m.t==="ck"){const a=S.ck[m.id]||(S.ck[m.id]={n:m.n,p:[],c:0});if(a.p[m.i]==null){a.p[m.i]=m.d;a.c++}if(a.c===a.n){delete S.ck[m.id];try{onHost(JSON.parse(a.p.join("")))}catch(e){}}return}
+ if(m.t==="img"){S.imgs[m.k]=m.src;fillImgs();return}
+ if(m.t==="slide"){showSlide(m.html);return}
+ clearInterval(S.tm);
  if(m.t==="hello"){S.name=m.name;S.score=m.score||0;sv('<div class="msg">Đã vào phòng! ✅<br><small class="note">Chờ cô bắt đầu…</small></div>')}
- else if(m.t==="wait"){sv(`<div class="msg">👀 Các em nhìn lên màn hình nhé<br><small class="note">${esc(m.title||"")}</small></div>`)}
+ else if(m.t==="wait"){sv('<div class="note" style="text-align:center;padding:8px">👀 Các em theo dõi slide của cô nhé</div>')}
  else if(m.t==="q"){S.answered=!!m.done;S.q=m;qView(m)}
  else if(m.t==="res"){S.score=m.total;sv(`<div class="msg">${!m.answered?'<div class="no">⏰</div>Chưa trả lời kịp':m.ok?'<div class="ok">✓</div>Đúng rồi! +'+m.pts+' điểm':'<div class="no">✗</div>Chưa đúng'+(m.right?'<br><small class="note">Đáp án: '+esc(m.right)+'</small>':'')}<br><small class="note">Hạng ${m.rank}/${m.of} · ${m.total} điểm</small></div>`)}
  else if(m.t==="poll_res"){sv('<div class="msg">Cảm ơn em đã bình chọn! 📊</div>')}
