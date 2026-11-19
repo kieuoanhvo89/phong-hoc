@@ -32,8 +32,15 @@ label.l{display:block;font-weight:700;font-size:14px;margin:12px 0 6px}
 #poll{position:fixed;inset:0;background:#000a;z-index:40;display:none;align-items:center;justify-content:center}#poll .panel{width:min(520px,94vw);margin:0}
 /* student */
 #stu{min-height:100vh;display:flex;flex-direction:column;padding:16px;gap:12px}
-#sslide{width:min(100%,calc((100vh - 270px)*1.7777));min-width:min(100%,320px);margin:0 auto;border-radius:10px;background:#000}
-#ctl{display:flex;flex-direction:column;flex:1;gap:10px}#ctl .opts button{min-height:64px;font-size:20px}
+#stu.live{padding:0;gap:0;height:100vh;overflow:hidden}#stu.live .top{height:26px;padding:4px 12px;font-size:13px}
+#sslide{width:min(100vw,calc((100vh - 26px - 78px)*1.7777));margin:0 auto;background:#000;flex:none}
+#ctl{flex:1;display:flex;flex-direction:column;justify-content:center;gap:6px;padding:6px 12px;min-height:78px}
+#ctl .msg{margin:0;padding:2px;font-size:17px}#ctl .msg .ok,#ctl .msg .no{font-size:26px;display:inline;margin-right:8px}
+#ctl .opts{flex:none;grid-template-columns:repeat(var(--n,4),1fr);gap:8px}#ctl .opts button{min-height:54px;font-size:22px;border-radius:12px;padding:6px}
+#ctl .opts button small{display:none}
+#ctl #ta{padding:8px 12px}#ctl #tsend{padding:9px 18px}
+.ansrow{display:flex;gap:8px;align-items:center}
+@media (max-width:640px){#ctl{flex:none;justify-content:flex-start}#ctl .opts{grid-template-columns:1fr 1fr}#stu.live{height:auto;min-height:100vh;overflow:auto}}
 #stu .top{display:flex;justify-content:space-between;font-size:14px;color:var(--mu)}
 .opts{display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1}
 .opts button{font-size:22px;border-radius:18px;min-height:96px;color:#fff;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;text-align:center;line-height:1.2}
@@ -2860,7 +2867,7 @@ $("hgo").onclick=()=>{$("hgo").disabled=true;$("hmsg").textContent="Đang tạo 
 /* ================= Học sinh ================= */
 let S={peer:null,conn:null,code:"",name:"",pid:localStorage.getItem("bg-pid")||("p"+rnd(10)),score:0,tm:null,ended:false,answered:false};localStorage.setItem("bg-pid",S.pid);
 S.imgs={};S.ck={};
-function sv(html){$("home").classList.add("hide");$("stu").classList.remove("hide");if(!$("ctl"))$("stu").innerHTML='<div class="top"><span id="tl"></span><span id="tr"></span></div><div class="sld hide" id="sslide"></div><div id="ctl"></div>';
+function sv(html){$("home").classList.add("hide");$("stu").classList.remove("hide");$("stu").classList.add("live");if(!$("ctl"))$("stu").innerHTML='<div class="top"><span id="tl"></span><span id="tr"></span></div><div class="sld hide" id="sslide"></div><div id="ctl"></div>';
  $("tl").textContent="👤 "+S.name;$("tr").textContent="Phòng "+S.code+" · "+S.score+" điểm";$("ctl").innerHTML=html}
 function fillImgs(){document.querySelectorAll("#sslide img[data-k]").forEach(im=>{const s=S.imgs[im.dataset.k];if(s&&im.getAttribute("src")!==s)im.src=s})}
 function showSlide(h){if(!$("sslide"))sv("");const el=$("sslide");el.classList.remove("hide");el.innerHTML=h;fillImgs()}
@@ -2883,8 +2890,8 @@ function onHost(m){if(!m||!m.t)return;
  else if(m.t==="end"){S.ended=true;S.score=m.total;sv(`<div class="msg">🏆 Kết thúc!<br>Em đứng hạng <b>${m.rank}/${m.of}</b><br>${m.total} điểm<br><small class="note">Cảm ơn em đã tham gia.</small></div>`)}}
 function qView(m){if(S.answered){sv('<div class="msg">✓ Đã gửi.<br><small class="note">Chờ cô công bố đáp án…</small></div>');return}
  const tm=m.limitMs!=null?'<div id="tm"><i></i></div>':"";let body;
- if(m.kind==="mc")body=`<div class="msg" style="margin:0;font-size:18px">${m.poll?"📊 "+esc(m.title):"Chọn đáp án"}</div><div class="opts">${m.opts.map((o,i)=>`<button class="o${i}" data-i="${i}">${String.fromCharCode(65+i)}${m.texts?`<small>${esc(o)}</small>`:""}</button>`).join("")}</div>`;
- else body=`<div class="msg" style="margin:0;font-size:18px">Nhập đáp án của em</div><input id="ta" placeholder="Gõ đáp án…" autocomplete="off" style="font-size:22px"><button id="tsend" style="font-size:20px">Gửi</button>`;
+ if(m.kind==="mc")body=`${m.poll?`<div class="msg" style="font-size:16px">📊 ${esc(m.title)}</div>`:""}<div class="opts" style="--n:${m.opts.length}">${m.opts.map((o,i)=>`<button class="o${i}" data-i="${i}">${String.fromCharCode(65+i)}${m.texts?`<small>${esc(o)}</small>`:""}</button>`).join("")}</div>`;
+ else body=`<div class="ansrow"><input id="ta" placeholder="Nhập đáp án của em…" autocomplete="off" style="font-size:20px;flex:1"><button id="tsend" style="font-size:18px">Gửi</button></div>`;
  sv(tm+body);
  if(m.limitMs!=null){const t0=performance.now(),tot=m.limitMs||1;S.tm=setInterval(()=>{const f=Math.max(0,1-(performance.now()-t0)/tot),i=document.querySelector("#tm i");if(i)i.style.width=f*100+"%";if(f<=0)clearInterval(S.tm)},200)}
  document.querySelectorAll(".opts button").forEach(b=>b.onclick=()=>ans(+b.dataset.i));const ts=$("tsend");if(ts){ts.onclick=()=>{const v=$("ta").value.trim();if(v)ans(v)};$("ta").addEventListener("keydown",e=>{if(e.key==="Enter")ts.click()})}}
